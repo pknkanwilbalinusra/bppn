@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Profil Aset Properti Eks PT PPA dan Eks BPPN</title>
+<meta name="description" content="Daftar dan profil aset properti eks kelolaan PT PPA (Persero) dan eks BPPN di Bali dan Nusa Tenggara Barat, Semester I 2026.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="lib/leaflet.css">
+<link rel="stylesheet" href="style.css?v=10">
+</head>
+<body class="locked">
+<header class="masthead">
+  <div class="mast-in">
+    <div class="lockup">
+      <div class="logos">
+        <span class="logo"><img src="logo/logo-kemenkeu.png" alt="Logo Kementerian Keuangan"></span>
+        <span class="logo"><img src="logo/logo-djkn.png" alt="Logo DJKN" onerror="this.parentNode.remove()"></span>
+      </div>
+      <div class="org">
+        <span class="org-1">Kementerian Keuangan Republik Indonesia</span>
+        <span class="org-2">Direktorat Jenderal Kekayaan Negara</span>
+        <span class="org-3" id="instansi">Kanwil DJKN Bali dan Nusa Tenggara</span>
+      </div>
+    </div>
+    <a href="#" class="logout" id="logout">Keluar</a>
+  </div>
+  <div class="mast-title">
+    <div class="mast-title-in">
+      <h1 id="judul">Profil Aset Properti</h1>
+      <p class="sub" id="periode">Eks Kelolaan PT PPA dan Eks BPPN</p>
+    </div>
+  </div>
+</header>
+<section class="gate" id="gate">
+  <form class="gate-card" id="gate-form" autocomplete="off">
+    <h2>Akses terbatas</h2>
+    <p>Halaman ini berisi data internal Kanwil DJKN Bali dan Nusa Tenggara. Masukkan password untuk melanjutkan.</p>
+    <label for="gate-pw">Password</label>
+    <div class="gate-row">
+      <input id="gate-pw" type="password" autocomplete="current-password" required>
+      <button type="button" class="gate-toggle" id="gate-toggle">Tampilkan</button>
+    </div>
+    <p class="gate-err" id="gate-err" role="alert" hidden></p>
+    <button type="submit" class="gate-btn" id="gate-btn">Masuk</button>
+  </form>
+</section>
+<div class="wrap">
+  <!-- Daftar aset -->
+  <section id="view-list">
+    <nav class="kat-tabs" id="kat-tabs" role="tablist" aria-label="Pilih kategori aset"></nav>
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Cari kode, nama, alamat, kabupaten…" autocomplete="off" aria-label="Cari aset">
+      <select id="f-prov" aria-label="Filter provinsi"></select>
+      <select id="f-status" aria-label="Filter status"></select>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="table-wrap">
+      <table class="list">
+        <thead>
+          <tr>
+            <th class="c-no">No</th>
+            <th>Aset</th>
+            <th>Kabupaten/Kota</th>
+            <th class="c-num">Luas tanah</th>
+            <th class="c-num">Luas bangunan</th>
+            <th>Status</th>
+            <th class="c-go" aria-hidden="true"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Detail aset -->
+  <section id="view-detail" hidden>
+    <a href="#" class="back" id="back">← Kembali ke daftar aset</a>
+    <div id="detail"></div>
+  </section>
+
+</div>
+<footer class="site-foot">
+  <div class="foot-in">
+    <div class="foot-org">
+      <img src="logo/logo-kemenkeu.png" alt="" class="foot-logo">
+      <div>
+        <b>Kanwil DJKN Bali dan Nusa Tenggara</b>
+        <span>Direktorat Jenderal Kekayaan Negara · Kementerian Keuangan</span>
+      </div>
+    </div>
+    <div class="foot-col">
+      <b>Alamat</b>
+      <span>Gedung Keuangan Negara I, Lantai 3<br>Jl. Dr. Kusuma Atmaja, Renon, Denpasar, Bali 80235</span>
+    </div>
+    <div class="foot-col">
+      <b>Kontak Bidang PKN</b>
+      <span>Telepon (0361) 226703, 235434<br>Faksimile (0361) 238217</span>
+    </div>
+  </div>
+  <p class="foot-src" id="foot"></p>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-btn lb-close" aria-label="Tutup">✕</button>
+  <button class="lb-btn lb-prev" aria-label="Foto sebelumnya">‹</button>
+  <figure><img id="lb-img" alt=""><figcaption id="lb-cap"></figcaption></figure>
+  <button class="lb-btn lb-next" aria-label="Foto berikutnya">›</button>
+</div>
+
+<script src="lib/leaflet.js"></script>
+<script src="gate.js?v=10"></script>
+</body>
+</html>
