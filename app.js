@@ -17,7 +17,13 @@
     'Usul Hibah': '#b7791f',
     'Serah Kelola LMAN': '#57606a',
     'Dalam Penyelesaian': '#be123c',
-    'Dalam Penelusuran': '#0369a1'
+    'Dalam Penelusuran': '#0369a1',
+    'BJDA': '#1d4ed8',
+    'BJDA/AYDA': '#7c3aed',
+    'AYDA': '#7c3aed',
+    'Eks BHS': '#0f766e',
+    'Perjanjian No. 131/2004': '#b45309',
+    'Tanpa Keterangan': '#5b6472'
   };
   var STATUS_FULL = { 'PSP': 'PSP (Penetapan Status Penggunaan)', 'Serah Kelola LMAN': 'Serah Kelola LMAN' };
   var $ = function (s) { return document.querySelector(s); };
@@ -59,9 +65,16 @@
     $('#f-prov').innerHTML = '<option value="">Semua provinsi</option>' + ['Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur'].filter(function (p) {
       return ASET.some(function (a) { return a.provinsi === p; });
     }).map(function (p) { return '<option>' + p + '</option>'; }).join('');
-    $('#f-status').innerHTML = '<option value="">Semua status</option>' + Object.keys(STATUS).filter(function (st) {
-      return ASET.some(function (a) { return a.status === st; });
-    }).map(function (st) { return '<option value="' + st + '">' + (STATUS_FULL[st] || st) + '</option>'; }).join('');
+    var known = Object.keys(STATUS);
+    var sts = [];
+    ASET.forEach(function (a) { if (a.status && sts.indexOf(a.status) < 0) sts.push(a.status); });
+    sts.sort(function (x, y) {
+      var ix = known.indexOf(x), iy = known.indexOf(y);
+      ix = ix < 0 ? 99 : ix; iy = iy < 0 ? 99 : iy;
+      return ix - iy || x.localeCompare(y);
+    });
+    $('#f-status').innerHTML = '<option value="">Semua status</option>' +
+      sts.map(function (st) { return '<option value="' + st + '">' + (STATUS_FULL[st] || st) + '</option>'; }).join('');
     renderList();
   }
 
@@ -152,6 +165,7 @@
       '<dt>Luas bangunan</dt><dd>' + esc(clean(a.luas_bangunan)) + '</dd>' +
       '<dt>NOP</dt><dd>' + esc(clean(a.nop)) + '</dd>' +
       '<dt>Waker</dt><dd>' + esc(clean(a.waker)) + '</dd>' +
+      (a.tambahan || []).map(function (t) { return '<dt>' + esc(t[0]) + '</dt><dd>' + esc(t[1]) + '</dd>'; }).join('') +
       '<dt>Koordinat</dt><dd>' + ((a.perkiraan || a.lat == null) ? '<span class="tag-warn">Belum tersedia</span>' : (+a.lat).toFixed(6) + ', ' + (+a.lng).toFixed(6)) + '</dd>' +
       '</dl></div>' +
       (a.dokumen.length ? '<div class="sec"><h3>Dokumen kepemilikan</h3><ul>' + li(a.dokumen) + '</ul></div>' : '') +

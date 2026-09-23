@@ -2,7 +2,7 @@
    Tanpa password yang benar, isi data.bin dan folder f/ tidak dapat dibaca. */
 (function () {
   'use strict';
-  var VER = '10';
+  var VER = '11';
   var SS_KEY = 'aset-kunci';
   var $ = function (s) { return document.querySelector(s); };
   var subtle = window.crypto && window.crypto.subtle;
