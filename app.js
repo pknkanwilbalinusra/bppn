@@ -169,14 +169,27 @@
       '<dt>Koordinat</dt><dd>' + ((a.perkiraan || a.lat == null) ? '<span class="tag-warn">Belum tersedia</span>' : (+a.lat).toFixed(6) + ', ' + (+a.lng).toFixed(6)) + '</dd>' +
       '</dl></div>' +
       (a.dokumen.length ? '<div class="sec"><h3>Dokumen kepemilikan</h3><ul>' + li(a.dokumen) + '</ul></div>' : '') +
-      (a.catatan.length ? '<div class="sec"><h3>Permasalahan dan perkembangan</h3><ol>' + li(a.catatan) + '</ol></div>' : '');
+      '<div class="sec upd"><h3>Permasalahan dan perkembangan</h3>' +
+      '<p class="upd-info" id="upd-info"></p>' +
+      '<ol class="upd-list" id="upd-list"><li class="upd-kosong">Memuat…</li></ol>' +
+      '<p class="upd-pulih" id="upd-pulih" hidden></p>' +
+      '<form class="upd-form" id="upd-form" autocomplete="off">' +
+      '<label class="upd-label" for="upd-teks">Tambahkan baris baru</label>' +
+      '<textarea id="upd-teks" rows="3" maxlength="2000" placeholder="Contoh: 12 Oktober 2026 dilakukan pemeriksaan fisik, plang masih terpasang."></textarea>' +
+      '<div class="upd-aksi"><input id="upd-nama" maxlength="60" placeholder="Nama penulis (opsional)">' +
+      '<button type="submit" class="upd-simpan" id="upd-simpan">Simpan</button></div>' +
+      '<p class="upd-pesan" id="upd-pesan" hidden></p></form></div>';
 
-    var photos = a.foto.map(function (f, i) {
-      return '<button data-i="' + i + '" aria-label="Perbesar foto: ' + esc(f.caption) + '"><img data-sec="' + (f.thumb || f.file) + '" alt="' + esc(f.caption) + '"></button>';
-    }).join('');
     var gmaps = 'https://www.google.com/maps?q=' + a.lat + ',' + a.lng;
     var aside =
-      (a.foto.length ? '<div class="sec"><h3>Foto (' + a.foto.length + ')</h3><div class="photos" id="photos">' + photos + '</div><p class="cap">Klik foto untuk memperbesar.</p></div>' : '<div class="sec"><h3>Foto</h3><p class="cap">Belum ada foto untuk aset ini.</p></div>') +
+      '<div class="sec fto-sec"><h3 id="fto-judul">Foto</h3>' +
+      '<div class="photos" id="photos"><p class="cap">Memuat foto…</p></div>' +
+      '<p class="cap" id="fto-cap"></p>' +
+      '<div class="fto-form"><label class="upd-label" for="fto-file">Tambah foto</label>' +
+      '<input type="file" id="fto-file" accept="image/*" multiple>' +
+      '<input id="fto-ket" maxlength="120" placeholder="Keterangan foto (opsional)">' +
+      '<button type="button" class="upd-simpan" id="fto-unggah">Unggah foto</button>' +
+      '<p class="upd-pesan" id="fto-pesan" hidden></p></div></div>' +
       (a.lat == null ? '<div class="sec"><h3>Lokasi</h3><p class="cap">Titik koordinat belum tersedia.</p></div>' : '<div class="sec"><h3>Lokasi</h3><div id="mini-map"></div><div class="map-links">' +
       (a.perkiraan ? '<span>Perkiraan lokasi dari alamat, belum titik GPS.</span>' : '<span>Titik GPS dari dokumen.</span>') +
       '<a href="' + gmaps + '" target="_blank" rel="noopener">Buka di Google Maps ↗</a></div></div>');
@@ -187,6 +200,8 @@
       '<div class="d-grid"><div class="panel">' + main + '</div><aside class="aside panel">' + aside + '</aside></div>';
     hydrateImages($('#detail'));
     buildMap(a);
+    siapkanCatatan(a);
+    siapkanFoto(a);
   }
   /* Foto terenkripsi dibuka lewat SECURE_IMG (gate.js); tanpa gate, pakai alamat biasa */
   function imgUrl(path) { return window.SECURE_IMG ? window.SECURE_IMG(path) : Promise.resolve(path); }
@@ -195,10 +210,6 @@
       imgUrl(im.getAttribute('data-sec')).then(function (u) { im.src = u; }).catch(function () { im.alt = 'Foto gagal dimuat'; });
     });
   }
-  $('#detail').addEventListener('click', function (e) {
-    var b = e.target.closest('#photos button'); if (b) openLb(+b.dataset.i);
-  });
-
   function destroyMap() { if (miniMap) { miniMap.remove(); miniMap = null; } }
   function buildMap(a) {
     destroyMap();
@@ -210,13 +221,301 @@
     setTimeout(function () { if (miniMap) miniMap.invalidateSize(); }, 60);
   }
 
+  /* ---------- Permasalahan dan perkembangan (gabungan dokumen + tambahan pengguna) ---------- */
+  var catRows = [], catEdit = null;
+  function tglIndo(iso) {
+    var b = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    var d = new Date(iso);
+    if (isNaN(d)) return '-';
+    var jam = ('0' + d.getHours()).slice(-2) + '.' + ('0' + d.getMinutes()).slice(-2);
+    return d.getDate() + ' ' + b[d.getMonth()] + ' ' + d.getFullYear() + ', ' + jam;
+  }
+  function pesan(teks, jenis, sel) {
+    var el = $(sel || '#upd-pesan'); if (!el) return;
+    if (!teks) { el.hidden = true; el.textContent = ''; return; }
+    el.hidden = false; el.textContent = teks;
+    el.className = 'upd-pesan' + (jenis ? ' ' + jenis : '');
+  }
+  /* gabungkan baris dokumen dengan catatan tambahan/perubahan/penghapusan */
+  function susunCatatan(a, rows) {
+    var ovr = {}, del = {}, tambah = [];
+    rows.forEach(function (r) {
+      var d = r.data || {}, k = d.k || 'add';
+      if (k === 'ovr' && typeof d.i === 'number') ovr[d.i] = r;
+      else if (k === 'del' && typeof d.i === 'number') del[d.i] = r;
+      else tambah.push(r);
+    });
+    var out = [], buang = [];
+    a.catatan.forEach(function (teks, i) {
+      if (del[i]) { buang.push(del[i].id); return; }
+      var o = ovr[i];
+      out.push(o
+        ? { key: 'b' + i, idx: i, teks: String(o.data.t || ''), asal: 'ubah', rec: o.id, p: o.data.p || '', w: o.data.w || o.created_at }
+        : { key: 'b' + i, idx: i, teks: teks, asal: 'dok', rec: null, p: '', w: null });
+    });
+    var waktu = function (r) { return String((r.data && r.data.w) || r.created_at || ''); };
+    tambah.sort(function (x, y) { return waktu(x) < waktu(y) ? -1 : waktu(x) > waktu(y) ? 1 : (x.id > y.id ? 1 : -1); });
+    tambah.forEach(function (r) {
+      out.push({
+        key: 'u' + r.id, idx: null, teks: String(r.data.t || ''), asal: 'user', rec: r.id,
+        p: r.data.p || '', w: r.data.w || r.created_at, e: r.data.e || null
+      });
+    });
+    out._buang = buang;
+    return out;
+  }
+  function metaCatatan(it) {
+    if (it.asal === 'dok') return 'Dari dokumen profil aset';
+    if (it.asal === 'ubah') return 'Diubah ' + tglIndo(it.w) + (it.p ? ' · ' + it.p : '') + ' · asalnya dari dokumen';
+    return tglIndo(it.w) + (it.p ? ' · ' + it.p : '') + (it.e ? ' · diubah ' + tglIndo(it.e) : '');
+  }
+  function gambarCatatan() {
+    var ol = $('#upd-list'); if (!ol) return;
+    if (!catRows.length) { ol.innerHTML = '<li class="upd-kosong">Belum ada catatan untuk aset ini.</li>'; }
+    else {
+      ol.innerHTML = catRows.map(function (it, i) {
+        if (catEdit === it.key) {
+          return '<li class="upd-item edit" data-key="' + esc(it.key) + '">' +
+            '<span class="upd-no">' + (i + 1) + '.</span>' +
+            '<div class="upd-isi"><textarea class="upd-edit-teks" rows="4" maxlength="2000">' + esc(it.teks) + '</textarea>' +
+            '<div class="upd-aksi"><input class="upd-edit-nama" maxlength="60" placeholder="Nama pengubah (opsional)" value="' + esc(it.asal === 'user' ? it.p : '') + '">' +
+            '<button type="button" class="upd-simpan upd-edit-simpan" data-key="' + esc(it.key) + '">Simpan perubahan</button>' +
+            '<button type="button" class="upd-batal" data-key="' + esc(it.key) + '">Batal</button></div></div></li>';
+        }
+        return '<li class="upd-item" data-key="' + esc(it.key) + '">' +
+          '<span class="upd-no">' + (i + 1) + '.</span>' +
+          '<div class="upd-isi"><div class="upd-teks">' + esc(it.teks) + '</div>' +
+          '<div class="upd-meta">' + esc(metaCatatan(it)) + '</div></div>' +
+          '<div class="upd-tombol">' +
+          '<button type="button" class="upd-ubah" data-key="' + esc(it.key) + '">Ubah</button>' +
+          '<button type="button" class="upd-hapus" data-key="' + esc(it.key) + '">Hapus</button></div></li>';
+      }).join('');
+    }
+    var pul = $('#upd-pulih');
+    if (pul) {
+      var n = (catRows._buang || []).length;
+      pul.hidden = !n;
+      pul.innerHTML = n ? n + ' baris dari dokumen disembunyikan. <button type="button" class="upd-link" id="upd-pulihkan">Tampilkan kembali</button>' : '';
+    }
+  }
+  function muatCatatan(a) {
+    var ol = $('#upd-list'); if (!ol) return;
+    ol.innerHTML = '<li class="upd-kosong">Memuat…</li>';
+    return window.ASET_UPDATES.list(a.id).then(function (rows) {
+      if (cur !== a) return;
+      catRows = susunCatatan(a, rows); catEdit = null; gambarCatatan();
+    }).catch(function (err) {
+      ol.innerHTML = '<li class="upd-kosong">Gagal memuat catatan. ' + esc(err.message || '') + '</li>';
+    });
+  }
+  function siapkanCatatan(a) {
+    catRows = []; catEdit = null;
+    var pusat = window.ASET_UPDATES && window.ASET_UPDATES.pusat;
+    $('#upd-info').innerHTML = pusat
+      ? 'Semua baris dapat diubah dan dihapus. Perubahan tersimpan terpusat dan terlihat oleh semua pengguna yang punya akses.'
+      : '<span class="tag-warn">Belum terhubung ke penyimpanan terpusat</span> Perubahan hanya tersimpan di perangkat ini.';
+    muatCatatan(a);
+    $('#upd-form').onsubmit = function (e) {
+      e.preventDefault();
+      var teks = $('#upd-teks').value.trim();
+      if (!teks) { pesan('Isi catatan dulu sebelum disimpan.', 'err'); return; }
+      var tombol = $('#upd-simpan');
+      tombol.disabled = true; tombol.textContent = 'Menyimpan…'; pesan('');
+      window.ASET_UPDATES.add(a.id, { k: 'add', t: teks, p: $('#upd-nama').value.trim(), w: new Date().toISOString() })
+        .then(function () { $('#upd-teks').value = ''; pesan('Catatan tersimpan.', 'ok'); return muatCatatan(a); })
+        .catch(function (err) { pesan('Gagal menyimpan. ' + (err.message || ''), 'err'); })
+        .then(function () { tombol.disabled = false; tombol.textContent = 'Simpan'; });
+    };
+  }
+  function cariCat(key) { return catRows.filter(function (x) { return x.key === key; })[0]; }
+
+  $('#detail').addEventListener('click', function (e) {
+    var t = e.target, a = cur;
+    if (!a) return;
+
+    var ubah = t.closest('.upd-ubah');
+    if (ubah) { catEdit = ubah.dataset.key; gambarCatatan(); var ta = $('#upd-list .upd-edit-teks'); if (ta) { ta.focus(); ta.selectionStart = ta.value.length; } return; }
+
+    var batal = t.closest('.upd-batal');
+    if (batal) { catEdit = null; gambarCatatan(); return; }
+
+    var simpan = t.closest('.upd-edit-simpan');
+    if (simpan) {
+      var it = cariCat(simpan.dataset.key); if (!it) return;
+      var li = simpan.closest('.upd-item');
+      var teks = li.querySelector('.upd-edit-teks').value.trim();
+      var nama = li.querySelector('.upd-edit-nama').value.trim();
+      if (!teks) { pesan('Isi catatan tidak boleh kosong. Gunakan tombol Hapus bila ingin menghilangkan baris.', 'err'); return; }
+      simpan.disabled = true; simpan.textContent = 'Menyimpan…'; pesan('');
+      var hapusLama = it.rec ? window.ASET_UPDATES.del(a.id, it.rec) : Promise.resolve();
+      var baru = it.idx === null
+        ? { k: 'add', t: teks, p: nama || it.p, w: it.w, e: new Date().toISOString() }
+        : { k: 'ovr', i: it.idx, t: teks, p: nama, w: new Date().toISOString() };
+      hapusLama.then(function () { return window.ASET_UPDATES.add(a.id, baru); })
+        .then(function () { pesan('Perubahan tersimpan.', 'ok'); return muatCatatan(a); })
+        .catch(function (err) { simpan.disabled = false; simpan.textContent = 'Simpan perubahan'; pesan('Gagal menyimpan. ' + (err.message || ''), 'err'); });
+      return;
+    }
+
+    var hapus = t.closest('.upd-hapus');
+    if (hapus) {
+      var h = cariCat(hapus.dataset.key); if (!h) return;
+      if (!confirm('Hapus baris ini dari daftar?')) return;
+      hapus.disabled = true; pesan('');
+      var urut = h.rec ? window.ASET_UPDATES.del(a.id, h.rec) : Promise.resolve();
+      urut.then(function () { return h.idx === null ? null : window.ASET_UPDATES.add(a.id, { k: 'del', i: h.idx, w: new Date().toISOString() }); })
+        .then(function () { pesan('Baris dihapus.', 'ok'); return muatCatatan(a); })
+        .catch(function (err) { hapus.disabled = false; pesan('Gagal menghapus. ' + (err.message || ''), 'err'); });
+      return;
+    }
+
+    if (t.closest('#upd-pulihkan')) {
+      window.ASET_UPDATES.delBanyak(a.id, catRows._buang || [])
+        .then(function () { pesan('Baris dokumen ditampilkan kembali.', 'ok'); return muatCatatan(a); })
+        .catch(function (err) { pesan('Gagal memulihkan. ' + (err.message || ''), 'err'); });
+      return;
+    }
+
+    if (t.closest('#fto-pulihkan')) {
+      window.ASET_FOTO.delBanyak(a.id, FOTO._buang || [])
+        .then(function () { pesan('Foto dokumen ditampilkan kembali.', 'ok', '#fto-pesan'); return muatFoto(a); })
+        .catch(function (err) { pesan('Gagal memulihkan foto. ' + (err.message || ''), 'err', '#fto-pesan'); });
+      return;
+    }
+
+    var buka = t.closest('.fto-img');
+    if (buka) { openLb(+buka.dataset.i); return; }
+
+    var fdel = t.closest('.fto-del');
+    if (fdel) {
+      if (!confirm('Hapus foto ini?')) return;
+      fdel.disabled = true; pesan('', '', '#fto-pesan');
+      var ff = FOTO[+fdel.dataset.i]; if (!ff) return;
+      var aksi = ff.t === 'up'
+        ? window.ASET_FOTO.del(a.id, ff.id)
+        : window.ASET_FOTO.add(a.id, { k: 'del', f: ff.file, w: new Date().toISOString() });
+      aksi.then(function () { pesan('Foto dihapus.', 'ok', '#fto-pesan'); return muatFoto(a); })
+        .catch(function (err) { fdel.disabled = false; pesan('Gagal menghapus foto. ' + (err.message || ''), 'err', '#fto-pesan'); });
+    }
+  });
+
+  /* ---------- Foto: tampilkan, hapus, unggah ---------- */
+  var FOTO = [], upUrl = {};
+  function susunFoto(a, rows) {
+    var buang = {}, tambah = [], recBuang = [];
+    rows.forEach(function (r) {
+      var d = r.data || {};
+      if (d.k === 'del' && d.f) { buang[d.f] = 1; recBuang.push(r.id); }
+      else if (d.d) tambah.push(r);
+    });
+    var out = a.foto.filter(function (f) { return !buang[f.file]; })
+      .map(function (f) { return { t: 'dok', file: f.file, thumb: f.thumb || f.file, caption: f.caption }; });
+    var waktu = function (r) { return String((r.data && r.data.w) || r.created_at || ''); };
+    tambah.sort(function (x, y) { return waktu(x) < waktu(y) ? -1 : 1; });
+    tambah.forEach(function (r) {
+      out.push({ t: 'up', id: r.id, caption: r.data.c || 'Foto unggahan', data: r.data.d, w: waktu(r) });
+    });
+    out._buang = recBuang;
+    return out;
+  }
+  function fotoUrl(f) {
+    if (f.t === 'dok') return imgUrl(f.file);
+    if (!upUrl[f.id]) upUrl[f.id] = Promise.resolve(f.data);
+    return upUrl[f.id];
+  }
+  function gambarFoto() {
+    var box = $('#photos'); if (!box) return;
+    $('#fto-judul').textContent = 'Foto (' + FOTO.length + ')';
+    var nb = (FOTO._buang || []).length;
+    $('#fto-cap').innerHTML = (FOTO.length ? 'Klik foto untuk memperbesar.' : 'Belum ada foto untuk aset ini.') +
+      (nb ? ' <br>' + nb + ' foto dokumen disembunyikan. <button type="button" class="upd-link" id="fto-pulihkan">Tampilkan kembali</button>' : '');
+    box.innerHTML = FOTO.map(function (f, i) {
+      return '<figure class="fto">' +
+        '<button type="button" class="fto-img" data-i="' + i + '" aria-label="Perbesar foto: ' + esc(f.caption) + '"><img alt="' + esc(f.caption) + '"></button>' +
+        '<button type="button" class="fto-del" data-i="' + i + '" title="Hapus foto ini">Hapus</button>' +
+        (f.t === 'up' ? '<figcaption class="fto-tag">Unggahan</figcaption>' : '') +
+        '</figure>';
+    }).join('');
+    FOTO.forEach(function (f, i) {
+      var im = box.querySelectorAll('.fto-img img')[i];
+      if (!im) return;
+      fotoUrl(f).then(function (u) { im.src = u; }).catch(function () { im.alt = 'Foto gagal dimuat'; });
+    });
+  }
+  function muatFoto(a) {
+    var box = $('#photos'); if (!box) return;
+    return window.ASET_FOTO.list(a.id).then(function (rows) {
+      if (cur !== a) return;
+      FOTO = susunFoto(a, rows); gambarFoto();
+    }).catch(function (err) {
+      FOTO = a.foto.map(function (f) { return { t: 'dok', file: f.file, thumb: f.thumb || f.file, caption: f.caption }; });
+      gambarFoto();
+      pesan('Daftar foto unggahan gagal dimuat. ' + (err.message || ''), 'err', '#fto-pesan');
+    });
+  }
+  /* perkecil foto di browser supaya ringan disimpan dan dibuka */
+  function kecilkan(file) {
+    return new Promise(function (ok, gagal) {
+      var fr = new FileReader();
+      fr.onerror = function () { gagal(new Error('Berkas tidak dapat dibaca.')); };
+      fr.onload = function () {
+        var im = new Image();
+        im.onerror = function () { gagal(new Error('Berkas ini bukan gambar yang dikenali.')); };
+        im.onload = function () {
+          var maxSisi = 1400;
+          function render(sisi, mutu) {
+            var s = Math.min(1, sisi / Math.max(im.width, im.height));
+            var c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(im.width * s));
+            c.height = Math.max(1, Math.round(im.height * s));
+            c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+            return c.toDataURL('image/jpeg', mutu);
+          }
+          var mutu = 0.8, out = render(maxSisi, mutu);
+          while (out.length > 560000 && mutu > 0.45) { mutu -= 0.1; out = render(maxSisi, mutu); }
+          if (out.length > 560000) out = render(1000, 0.7);
+          if (out.length > 900000) { gagal(new Error('Foto terlalu besar untuk disimpan.')); return; }
+          ok(out);
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function siapkanFoto(a) {
+    FOTO = []; upUrl = {};
+    muatFoto(a);
+    var tombol = $('#fto-unggah'); if (!tombol) return;
+    tombol.onclick = function () {
+      var inp = $('#fto-file'), ket = $('#fto-ket');
+      var files = Array.prototype.slice.call(inp.files || []);
+      if (!files.length) { pesan('Pilih berkas foto dulu.', 'err', '#fto-pesan'); return; }
+      if (!window.ASET_FOTO.pusat && !confirm('Penyimpanan terpusat belum aktif, foto hanya tersimpan di perangkat ini dan ruangnya terbatas. Lanjutkan?')) return;
+      tombol.disabled = true; pesan('Menyiapkan foto…', '', '#fto-pesan');
+      var n = 0;
+      files.reduce(function (p, f, i) {
+        return p.then(function () {
+          pesan('Mengunggah ' + (i + 1) + ' dari ' + files.length + '…', '', '#fto-pesan');
+          return kecilkan(f).then(function (dataUrl) {
+            var c = ket.value.trim() || f.name.replace(/\.[^.]+$/, '');
+            return window.ASET_FOTO.add(a.id, { k: 'add', c: c, d: dataUrl, w: new Date().toISOString() });
+          }).then(function () { n++; });
+        });
+      }, Promise.resolve())
+        .then(function () { inp.value = ''; ket.value = ''; pesan(n + ' foto tersimpan.', 'ok', '#fto-pesan'); return muatFoto(a); })
+        .catch(function (err) { pesan('Gagal mengunggah. ' + (err.message || ''), 'err', '#fto-pesan'); })
+        .then(function () { tombol.disabled = false; });
+    };
+  }
+
   /* Lightbox */
-  function openLb(i) { curPhoto = i; $('#lightbox').hidden = false; showLb(); }
+  function openLb(i) { if (!FOTO.length) return; curPhoto = i; $('#lightbox').hidden = false; showLb(); }
   function showLb() {
-    var n = cur.foto.length; curPhoto = (curPhoto + n) % n;
-    var f = cur.foto[curPhoto];
+    var n = FOTO.length; if (!n) { closeLb(); return; }
+    curPhoto = (curPhoto + n) % n;
+    var f = FOTO[curPhoto];
     var want = curPhoto; $('#lb-img').removeAttribute('src'); $('#lb-img').alt = f.caption;
-    imgUrl(f.file).then(function (u) { if (curPhoto === want) $('#lb-img').src = u; });
+    fotoUrl(f).then(function (u) { if (curPhoto === want) $('#lb-img').src = u; });
     $('#lb-cap').textContent = f.caption + ' (' + (curPhoto + 1) + '/' + n + ')';
   }
   function closeLb() { $('#lightbox').hidden = true; }

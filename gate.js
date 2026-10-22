@@ -2,7 +2,7 @@
    Tanpa password yang benar, isi data.bin dan folder f/ tidak dapat dibaca. */
 (function () {
   'use strict';
-  var VER = '11';
+  var VER = '13';
   var SS_KEY = 'aset-kunci';
   var $ = function (s) { return document.querySelector(s); };
   var subtle = window.crypto && window.crypto.subtle;
@@ -20,10 +20,27 @@
     return fetch('kunci.json?v=' + VER).then(function (r) { return r.json(); }).then(function (k) {
       return subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']).then(function (base) {
         return subtle.deriveKey({ name: 'PBKDF2', salt: b64ToBuf(k.salt), iterations: k.iter, hash: 'SHA-256' },
-          base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+          base, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
       });
     });
   }
+
+  /* Dipakai updates.js: enkripsi/dekripsi teks update dengan kunci halaman */
+  window.SECURE_TEXT = {
+    enc: function (teks) {
+      var iv = crypto.getRandomValues(new Uint8Array(12));
+      return subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(teks))
+        .then(function (ct) {
+          var u = new Uint8Array(iv.length + ct.byteLength);
+          u.set(iv, 0); u.set(new Uint8Array(ct), iv.length);
+          return bufToB64(u.buffer);
+        });
+    },
+    dec: function (b64) {
+      var buf = b64ToBuf(b64);
+      return decrypt(buf).then(function (plain) { return new TextDecoder().decode(plain); });
+    }
+  };
 
   /* Dipakai app.js untuk menampilkan foto */
   window.SECURE_IMG = function (path) {
@@ -86,7 +103,7 @@
   var saved = null;
   try { saved = sessionStorage.getItem(SS_KEY); } catch (e) {}
   if (saved) {
-    subtle.importKey('raw', b64ToBuf(saved), { name: 'AES-GCM' }, true, ['decrypt'])
+    subtle.importKey('raw', b64ToBuf(saved), { name: 'AES-GCM' }, true, ['encrypt', 'decrypt'])
       .then(function (k) { return unlock(k, false); })
       .catch(function () { try { sessionStorage.removeItem(SS_KEY); } catch (e) {} $('#gate-pw').focus(); });
   } else {
