@@ -1,11 +1,23 @@
 /* ====================================================================
-   PENGATURAN PENYIMPANAN UPDATE PERKEMBANGAN ASET
+   PENGATURAN PENYIMPANAN CATATAN, PENILAIAN, DAN FOTO
    --------------------------------------------------------------------
-   Isi dua baris di bawah ini dengan data proyek Supabase Anda
-   (lihat PANDUAN-SUPABASE.txt). Selama masih kosong, update hanya
-   tersimpan di perangkat masing-masing pengguna.
+   Pilih SALAH SATU cara di bawah ini.
+
+   CARA 1 (disarankan, tanpa layanan tambahan dan tanpa biaya):
+   simpan di repository GitHub ini sendiri. Isi GH_REPO dengan
+   "nama-akun/nama-repository". Semua orang yang punya password dapat
+   membaca; yang ingin mengisi menempelkan token GitHub lewat tombol
+   "Mode isi" di pojok kanan atas. Lihat PANDUAN-GITHUB.txt.
+
+   CARA 2: Supabase. Kosongkan GH_REPO, lalu isi dua baris SUPABASE
+   di bawahnya. Lihat PANDUAN-SUPABASE.txt.
+
+   Bila keduanya kosong, isian hanya tersimpan di perangkat
+   masing-masing pengguna.
    ==================================================================== */
 
- window.SUPABASE_URL = 'https://wakcoecohjcbsqicqmch.supabase.co';
-   window.SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indha2NvZWNvaGpjYnNxaWNxbWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2MzUxMzMsImV4cCI6MjEwODIxMTEzM30.yq39xzBFV_nI6kwP7D33NPTRJFQ_8gM1VjMxuPMb6SY';
+window.GH_REPO = 'pknkanwilbalinusra/bppn';
+window.GH_BRANCH = 'main';
 
+window.SUPABASE_URL = '';
+window.SUPABASE_KEY = '';

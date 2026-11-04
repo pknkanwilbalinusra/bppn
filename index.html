@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="lib/leaflet.css">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body class="locked">
 <header class="masthead">
@@ -26,7 +26,10 @@
         <span class="org-3" id="instansi">Kanwil DJKN Bali dan Nusa Tenggara</span>
       </div>
     </div>
-    <a href="#" class="logout" id="logout">Keluar</a>
+    <div class="mast-aksi">
+      <a href="#" class="logout" id="mode-isi" hidden>Mode isi</a>
+      <a href="#" class="logout" id="logout">Keluar</a>
+    </div>
   </div>
   <div class="mast-title">
     <div class="mast-title-in">
@@ -58,8 +61,27 @@
       <select id="f-prov" aria-label="Filter provinsi"></select>
       <select id="f-status" aria-label="Filter status"></select>
     </div>
-    <p class="count" id="count"></p>
-    <div class="table-wrap">
+    <div class="tampil-bar">
+      <p class="count" id="count"></p>
+      <div class="tampil" role="tablist" aria-label="Pilih tampilan">
+        <button type="button" class="tampil-btn on" id="tb-peta" aria-pressed="true">Peta</button>
+        <button type="button" class="tampil-btn" id="tb-tabel" aria-pressed="false">Tabel</button>
+      </div>
+    </div>
+    <div class="map-wrap" id="map-wrap" hidden>
+      <div class="map-area">
+        <div id="big-map"></div>
+        <aside class="map-panel" id="map-panel" hidden></aside>
+      </div>
+      <div class="map-bawah">
+        <div class="map-legend" id="map-legend"></div>
+        <div class="map-alat">
+          <button type="button" class="map-btn" id="map-semua">Tampilkan semua aset</button>
+        </div>
+      </div>
+      <p class="cap map-info" id="map-info"></p>
+    </div>
+    <div class="table-wrap" id="table-wrap">
       <table class="list">
         <thead>
           <tr>
@@ -105,6 +127,21 @@
   <p class="foot-src" id="foot"></p>
 </footer>
 
+<div class="tokbox" id="tokbox" hidden>
+  <form class="gate-card" id="tok-form" autocomplete="off">
+    <h2>Mode isi</h2>
+    <p>Tempelkan token GitHub agar dapat mengisi, mengubah, dan menghapus data. Token hanya tersimpan selama tab ini terbuka, tidak ikut tersimpan di website.</p>
+    <label for="tok-in">Token GitHub</label>
+    <div class="gate-row">
+      <input id="tok-in" type="password" autocomplete="off" required>
+      <button type="button" class="gate-toggle" id="tok-lihat">Tampilkan</button>
+    </div>
+    <p class="gate-err" id="tok-err" role="alert" hidden></p>
+    <button type="submit" class="gate-btn" id="tok-btn">Masuk mode isi</button>
+    <button type="button" class="tok-batal" id="tok-batal">Batal</button>
+  </form>
+</div>
+
 <div class="lightbox" id="lightbox" hidden>
   <button class="lb-btn lb-close" aria-label="Tutup">✕</button>
   <button class="lb-btn lb-prev" aria-label="Foto sebelumnya">‹</button>
@@ -113,8 +150,8 @@
 </div>
 
 <script src="lib/leaflet.js"></script>
-<script src="config.js?v=13"></script>
-<script src="updates.js?v=13"></script>
-<script src="gate.js?v=13"></script>
+<script src="config.js?v=17"></script>
+<script src="updates.js?v=17"></script>
+<script src="gate.js?v=17"></script>
 </body>
 </html>

@@ -9,6 +9,10 @@
       px = px < 0 ? 99 : px; py = py < 0 ? 99 : py;
       return px - py || x._i - y._i;
     });
+  (function () {
+    var hit = {};
+    ALL.forEach(function (a) { hit[a.kategori] = (hit[a.kategori] || 0) + 1; a._no = hit[a.kategori]; });
+  })();
   var STATUS = {
     'Usul Lelang': '#c2410c',
     'PSP': '#2563eb',
@@ -43,6 +47,19 @@
     return '<a href="#' + k.toLowerCase() + '" class="kat-tab" data-kat="' + k + '" role="tab">' + esc(KAT[k].label) + ' <span>' + n + '</span></a>';
   }).join('');
 
+  function judulKategori() {
+    $('#judul').textContent = KAT[kat].judul;
+    $('#foot').textContent = 'Sumber: ' + KAT[kat].judul + ', ' + DATA.meta.periode + ' — ' + DATA.meta.instansi + '. Peta © OpenStreetMap.';
+  }
+  function ringkasKategori() {
+    var bidang = ASET.reduce(function (n, a) { return n + a.kode_list.length; }, 0);
+    var nb = ASET.filter(function (a) { return a.provinsi === 'Bali'; }).length;
+    var nn = ASET.filter(function (a) { return a.provinsi === 'Nusa Tenggara Barat'; }).length;
+    $('#summary').innerHTML = [
+      [ASET.length, 'Profil aset'], [bidang, 'Bidang aset'],
+      [nb, 'Profil di Bali'], [nn, 'Profil di NTB']
+    ].map(function (x) { return '<div class="stat"><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('');
+  }
   function setKategori(k) {
     if (!KAT[k]) k = KAT_KEYS[0];
     var changed = k !== kat || !ASET.length;
@@ -51,16 +68,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('.kat-tab'), function (t) {
       var on = t.dataset.kat === k; t.classList.toggle('on', on); t.setAttribute('aria-selected', on);
     });
-    $('#judul').textContent = KAT[k].judul;
-    $('#foot').textContent = 'Sumber: ' + KAT[k].judul + ', ' + DATA.meta.periode + ' — ' + DATA.meta.instansi + '. Peta © OpenStreetMap.';
+    if (!petaAktif) judulKategori();
     if (!changed) return;
-    var bidang = ASET.reduce(function (n, a) { return n + a.kode_list.length; }, 0);
-    var nb = ASET.filter(function (a) { return a.provinsi === 'Bali'; }).length;
-    var nn = ASET.filter(function (a) { return a.provinsi === 'Nusa Tenggara Barat'; }).length;
-    $('#summary').innerHTML = [
-      [ASET.length, 'Profil aset'], [bidang, 'Bidang aset'],
-      [nb, 'Profil di Bali'], [nn, 'Profil di NTB']
-    ].map(function (x) { return '<div class="stat"><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('');
+    if (!petaAktif) ringkasKategori();
     $('#q').value = '';
     $('#f-prov').innerHTML = '<option value="">Semua provinsi</option>' + ['Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur'].filter(function (p) {
       return ASET.some(function (a) { return a.provinsi === p; });
@@ -80,9 +90,9 @@
 
   ['#q', '#f-prov', '#f-status'].forEach(function (s) { $(s).addEventListener('input', renderList); });
 
-  function filtered() {
+  function filtered(base) {
     var q = norm($('#q').value).trim(), p = $('#f-prov').value, st = $('#f-status').value;
-    return ASET.filter(function (a) {
+    return (base || ASET).filter(function (a) {
       if (p && a.provinsi !== p) return false;
       if (st && a.status !== st) return false;
       if (!q) return true;
@@ -113,6 +123,7 @@
         '<td class="c-go">›</td></tr>';
     });
     $('#rows').innerHTML = html;
+    if (petaAktif && petaSiap) { ringkasPeta(); petaMuat(); }
   }
   function shortArea(v) {
     v = clean(v);
@@ -142,9 +153,291 @@
       setKategori(k);
       $('#view-detail').hidden = true; $('#view-list').hidden = false;
       destroyMap(); window.scrollTo(0, wasDetail ? listScroll : 0);
+      if (petaAktif && bigMap) setTimeout(function () { bigMap.invalidateSize(); gambarTitik(); }, 50);
       document.title = KAT[k].judul;
     }
   }
+
+
+  /* ---------- Peta sebaran seluruh aset (PPA, BPPN, BDL dalam satu peta) ---------- */
+  var WARNA_KAT = { PPA: '#1D4ED8', BPPN: '#EAB308', BDL: '#15803D' };
+  var bigMap = null, bigLayer = null, petaAktif = false, petaIsi = [], petaSiap = false;
+  var petaKat = {}, pilihAset = null;
+  KAT_KEYS.forEach(function (k) { petaKat[k] = true; });
+
+  var LAPIS = {
+    'Peta jalan': function () {
+      return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+    },
+    'Satelit': function () {
+      return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Citra © Esri, Maxar, Earthstar Geographics' });
+    }
+  };
+  function warnaKat(k) { return WARNA_KAT[k] || '#29166F'; }
+  function labelKat(k) { return KAT[k] ? KAT[k].label : k; }
+
+  /* pin lokasi bernomor, bentuknya seperti penanda pada peta umum */
+  function pinSvg(a, pilih) {
+    var w = warnaKat(a.kategori), no = String(a._no || ''), ukuran = no.length > 2 ? 10.5 : 12.5;
+    return '<span class="pin-bungkus' + (pilih ? ' pin-pilih' : '') + '">' +
+      '<svg width="30" height="42" viewBox="0 0 30 42" aria-hidden="true">' +
+      '<path d="M15 40.5C15 40.5 27.5 25 27.5 15A12.5 12.5 0 1 0 2.5 15C2.5 25 15 40.5 15 40.5Z" fill="' + w + '" stroke="#fff" stroke-width="2.4"/>' +
+      (a.perkiraan ? '<circle cx="15" cy="15" r="12.5" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="3 3"/>' : '') +
+      '<text x="15" y="19.6" text-anchor="middle" font-family="inherit" font-size="' + ukuran + '" font-weight="800" fill="#fff">' + esc(no) + '</text>' +
+      '</svg></span>';
+  }
+
+  function buatPetaBesar() {
+    if (bigMap || !window.L) return;
+    bigMap = L.map('big-map', { scrollWheelZoom: true, zoomControl: true });
+    var dasar = {};
+    Object.keys(LAPIS).forEach(function (n) { dasar[n] = LAPIS[n](); });
+    dasar['Peta jalan'].addTo(bigMap);
+    L.control.layers(dasar, null, { position: 'topright' }).addTo(bigMap);
+    bigLayer = L.layerGroup().addTo(bigMap);
+    bigMap.setView([-8.55, 115.8], 9);
+    /* titik dikelompokkan memakai koordinat lapisan, yang hanya berubah saat zoom */
+    bigMap.on('zoomend', gambarTitik);
+    bigMap.on('click', tutupPanel);
+    petaSiap = true;
+  }
+
+  /* kelompokkan pin yang berdekatan di layar agar tidak bertumpuk */
+  function kelompok(list) {
+    var sel = {}, hasil = [];
+    list.forEach(function (a) {
+      var p = bigMap.latLngToLayerPoint([a.lat, a.lng]);
+      var k = Math.round(p.x / 46) + '_' + Math.round(p.y / 56);
+      (sel[k] = sel[k] || []).push(a);
+    });
+    Object.keys(sel).forEach(function (k) { hasil.push(sel[k]); });
+    return hasil;
+  }
+  function gambarTitik() {
+    if (!bigMap || !bigLayer) return;
+    bigLayer.clearLayers();
+    kelompok(petaIsi).forEach(function (g) {
+      if (g.length === 1) {
+        var a = g[0];
+        L.marker([a.lat, a.lng], {
+          icon: L.divIcon({ className: '', iconSize: [30, 42], iconAnchor: [15, 42], html: pinSvg(a, pilihAset === a) }),
+          title: labelKat(a.kategori) + ' ' + a._no + ' — ' + a.nama,
+          riseOnHover: true
+        }).on('click', function (e) { if (e.originalEvent) e.originalEvent.stopPropagation(); bukaPanel(a); }).addTo(bigLayer);
+      } else {
+        var lat = 0, lng = 0;
+        g.forEach(function (x) { lat += x.lat; lng += x.lng; });
+        var n = g.length, besar = n > 24 ? 46 : n > 9 ? 40 : 34;
+        L.marker([lat / n, lng / n], {
+          icon: L.divIcon({
+            className: '', iconSize: [besar, besar], iconAnchor: [besar / 2, besar / 2],
+            html: '<span class="gugus" style="width:' + besar + 'px;height:' + besar + 'px">' + n + '</span>'
+          }),
+          title: n + ' aset di sekitar sini — klik untuk memperbesar'
+        }).on('click', function (e) {
+          if (e.originalEvent) e.originalEvent.stopPropagation();
+          var b = L.latLngBounds(g.map(function (x) { return [x.lat, x.lng]; }));
+          bigMap.fitBounds(b.pad(0.3), { maxZoom: Math.min(18, bigMap.getZoom() + 4) });
+        }).addTo(bigLayer);
+      }
+    });
+  }
+
+  /* ---------- Panel samping saat pin diklik ---------- */
+  var panelFoto = 0;
+  function tutupPanel() {
+    pilihAset = null; panelFoto = 0;
+    var el = $('#map-panel'); if (el) { el.hidden = true; el.innerHTML = ''; }
+    if (bigLayer) gambarTitik();
+  }
+  function gambarPanel() {
+    var a = pilihAset; if (!a) return;
+    var el = $('#map-panel'); if (!el) return;
+    var foto = a.foto || [], n = foto.length;
+    var w = warnaKat(a.kategori);
+    el.hidden = false;
+    el.innerHTML =
+      '<button type="button" class="panel-tutup" id="panel-tutup" aria-label="Tutup">✕</button>' +
+      (n
+        ? '<div class="panel-foto"><img alt="' + esc(foto[0].caption || a.nama) + '">' +
+          (n > 1 ? '<button type="button" class="panel-fnav panel-prev" aria-label="Foto sebelumnya">‹</button>' +
+            '<button type="button" class="panel-fnav panel-next" aria-label="Foto berikutnya">›</button>' +
+            '<span class="panel-fno"></span>' : '') + '</div>'
+        : '<div class="panel-foto panel-kosong">Belum ada foto</div>') +
+      '<div class="panel-isi">' +
+      '<span class="panel-kat" style="background:' + w + '">' + esc(labelKat(a.kategori)) + ' · ' + esc(String(a._no)) + '</span>' +
+      '<div class="panel-kode">' + esc(a.kode) + '</div>' +
+      '<h3 class="panel-nama">' + esc(a.nama) + '</h3>' +
+      '<p class="panel-alamat">' + esc(a.alamat) + ', ' + esc(a.kabupaten) + ', ' + esc(a.provinsi) + '</p>' +
+      '<div class="panel-status">' + status(a) + '</div>' +
+      '<dl class="panel-kv">' +
+      '<dt>Jenis aset</dt><dd>' + esc(a.jenis) + '</dd>' +
+      '<dt>Luas tanah</dt><dd>' + esc(clean(a.luas_tanah)) + '</dd>' +
+      '<dt>Luas bangunan</dt><dd>' + esc(clean(a.luas_bangunan)) + '</dd>' +
+      '<dt>Koordinat</dt><dd>' + (a.lat == null ? '–' : (+a.lat).toFixed(6) + ', ' + (+a.lng).toFixed(6)) + '</dd>' +
+      '</dl>' +
+      (a.perkiraan ? '<p class="panel-kira">Titik perkiraan dari alamat, belum titik GPS.</p>' : '') +
+      '<a class="panel-btn" href="#' + esc(a.id) + '" id="panel-detail">Detail aset ›</a>' +
+      '</div>';
+    muatFotoPanel();
+  }
+  function muatFotoPanel() {
+    var a = pilihAset; if (!a || !a.foto || !a.foto.length) return;
+    var n = a.foto.length;
+    panelFoto = (panelFoto + n) % n;
+    var im = $('#map-panel .panel-foto img'); if (!im) return;
+    var no = $('#map-panel .panel-fno'); if (no) no.textContent = (panelFoto + 1) + '/' + n;
+    var mau = panelFoto;
+    im.removeAttribute('src');
+    imgUrl(a.foto[panelFoto].file).then(function (u) { if (panelFoto === mau && pilihAset === a) im.src = u; })
+      .catch(function () { im.alt = 'Foto gagal dimuat'; });
+  }
+  function bukaPanel(a) {
+    pilihAset = a; panelFoto = 0;
+    gambarPanel(); gambarTitik();
+    var ll = [a.lat, a.lng];
+    if (!bigMap.getBounds().pad(-0.15).contains(ll)) bigMap.panTo(ll, { animate: true });
+    /* di layar kecil panel muncul di bawah peta, jadi digulir agar langsung terlihat */
+    if (window.matchMedia && window.matchMedia('(max-width:860px)').matches) {
+      setTimeout(function () {
+        var el = $('#map-panel');
+        if (el && !el.hidden) el.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      }, 80);
+    }
+  }
+  $('#map-panel').addEventListener('click', function (e) {
+    if (e.target.closest('#panel-tutup')) { tutupPanel(); return; }
+    if (e.target.closest('.panel-prev')) { panelFoto--; muatFotoPanel(); return; }
+    if (e.target.closest('.panel-next')) { panelFoto++; muatFotoPanel(); return; }
+    if (e.target.closest('#panel-detail')) { listScroll = window.scrollY; }
+  });
+
+  /* ---------- Isi peta, legenda, dan keterangan ---------- */
+  function petaSumber() {
+    return filtered(ALL).filter(function (a) { return petaKat[a.kategori] !== false; });
+  }
+  function petaMuat() {
+    var list = petaSumber();
+    petaIsi = list.filter(function (a) { return a.lat != null; });
+    if (pilihAset && petaIsi.indexOf(pilihAset) < 0) tutupPanel();
+    var kira = petaIsi.filter(function (a) { return a.perkiraan; }).length;
+    var tanpa = list.length - petaIsi.length;
+    var info = $('#map-info');
+    if (info) {
+      info.textContent = petaIsi.length + ' aset tampil di peta' +
+        (kira ? ', ' + kira + ' di antaranya titik perkiraan dari alamat' : '') +
+        (tanpa ? '. ' + tanpa + ' aset belum punya koordinat' : '') +
+        '. Klik pin untuk melihat ringkasannya.';
+    }
+    gambarLegenda();
+    gambarTitik();
+  }
+  function gambarLegenda() {
+    var leg = $('#map-legend'); if (!leg) return;
+    var dasar = filtered(ALL);
+    leg.innerHTML = KAT_KEYS.map(function (k) {
+      var n = dasar.filter(function (a) { return a.kategori === k && a.lat != null; }).length;
+      return '<label class="kat-cek"><input type="checkbox" data-kat="' + k + '"' + (petaKat[k] !== false ? ' checked' : '') + '>' +
+        '<span class="kat-pin" style="background:' + warnaKat(k) + '"></span>' +
+        esc(labelKat(k)) + ' <b>' + n + '</b></label>';
+    }).join('');
+  }
+  $('#map-legend').addEventListener('change', function (e) {
+    var c = e.target.closest('input[data-kat]'); if (!c) return;
+    petaKat[c.dataset.kat] = c.checked;
+    petaMuat();
+  });
+
+  function petaFit() {
+    if (!bigMap || !petaIsi.length) return;
+    bigMap.fitBounds(L.latLngBounds(petaIsi.map(function (a) { return [a.lat, a.lng]; })).pad(0.12), { maxZoom: 15 });
+  }
+  function ringkasPeta() {
+    var dasar = filtered(ALL);
+    var kotak = [['<b>' + dasar.length + '</b><span>Total profil aset</span>', 'var(--navy)']];
+    KAT_KEYS.forEach(function (k) {
+      kotak.push(['<b>' + dasar.filter(function (a) { return a.kategori === k; }).length + '</b><span>' + esc(labelKat(k)) + '</span>', warnaKat(k)]);
+    });
+    $('#summary').innerHTML = kotak.map(function (x) {
+      return '<div class="stat" style="border-top-color:' + x[1] + '">' + x[0] + '</div>';
+    }).join('');
+  }
+  function setTampilan(mode, fit) {
+    petaAktif = mode === 'peta';
+    $('#table-wrap').hidden = petaAktif;
+    $('#map-wrap').hidden = !petaAktif;
+    $('#count').hidden = petaAktif;
+    $('#kat-tabs').hidden = petaAktif;
+    $('#tb-tabel').classList.toggle('on', !petaAktif);
+    $('#tb-peta').classList.toggle('on', petaAktif);
+    $('#tb-tabel').setAttribute('aria-pressed', !petaAktif);
+    $('#tb-peta').setAttribute('aria-pressed', petaAktif);
+    try { sessionStorage.setItem('aset-tampilan', mode); } catch (e) {}
+    if (!petaAktif) {
+      judulKategori(); ringkasKategori();
+      return;
+    }
+    $('#judul').textContent = 'Peta Sebaran Aset Properti';
+    $('#foot').textContent = 'Sumber: ' + KAT_KEYS.map(function (k) { return labelKat(k); }).join(', ') +
+      ', ' + DATA.meta.periode + ' — ' + DATA.meta.instansi + '. Peta © OpenStreetMap.';
+    ringkasPeta();
+    buatPetaBesar();
+    setTimeout(function () {
+      if (!bigMap) return;
+      bigMap.invalidateSize();
+      petaMuat();
+      if (fit !== false) petaFit();
+    }, 40);
+  }
+  $('#tb-tabel').addEventListener('click', function () { setTampilan('tabel'); });
+  $('#tb-peta').addEventListener('click', function () { setTampilan('peta'); });
+  $('#map-semua').addEventListener('click', petaFit);
+
+  /* ---------- Hak mengisi (mode isi) ---------- */
+  function bisaUbah() { return !window.ASET_AKUN || window.ASET_AKUN.bisaUbah(); }
+  function perluToken() { return !!(window.ASET_AKUN && window.ASET_AKUN.perluToken); }
+  function catatanBaca() {
+    return '<span class="tag-warn">Hanya baca</span> Klik <b>Mode isi</b> di pojok kanan atas dan tempelkan token GitHub untuk mengisi atau mengubah.';
+  }
+  function aturTombolMode() {
+    var b = $('#mode-isi'); if (!b) return;
+    if (!perluToken()) { b.hidden = true; return; }
+    b.hidden = false;
+    b.textContent = window.ASET_AKUN.punyaToken() ? 'Keluar mode isi' : 'Mode isi';
+  }
+  function bukaTokbox(buka) {
+    $('#tokbox').hidden = !buka;
+    $('#tok-err').hidden = true;
+    if (buka) { $('#tok-in').value = ''; $('#tok-in').focus(); }
+  }
+  $('#mode-isi').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (window.ASET_AKUN.punyaToken()) {
+      window.ASET_AKUN.keluar(); aturTombolMode();
+      if (cur) renderDetail(cur);
+      return;
+    }
+    bukaTokbox(true);
+  });
+  $('#tok-batal').addEventListener('click', function () { bukaTokbox(false); });
+  $('#tokbox').addEventListener('click', function (e) { if (e.target.id === 'tokbox') bukaTokbox(false); });
+  $('#tok-lihat').addEventListener('click', function () {
+    var i = $('#tok-in'), lihat = i.type === 'password';
+    i.type = lihat ? 'text' : 'password'; this.textContent = lihat ? 'Sembunyikan' : 'Tampilkan';
+  });
+  $('#tok-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = $('#tok-btn');
+    b.disabled = true; b.textContent = 'Memeriksa…'; $('#tok-err').hidden = true;
+    window.ASET_AKUN.masuk($('#tok-in').value).then(function () {
+      bukaTokbox(false); aturTombolMode();
+      if (cur) renderDetail(cur);
+    }).catch(function (err) {
+      $('#tok-err').textContent = err.message || 'Token tidak dapat dipakai.';
+      $('#tok-err').hidden = false;
+    }).then(function () { b.disabled = false; b.textContent = 'Masuk mode isi'; });
+  });
 
   /* Detail */
   var cur = null, curPhoto = 0, miniMap = null;
@@ -167,7 +460,21 @@
       '<dt>Waker</dt><dd>' + esc(clean(a.waker)) + '</dd>' +
       (a.tambahan || []).map(function (t) { return '<dt>' + esc(t[0]) + '</dt><dd>' + esc(t[1]) + '</dd>'; }).join('') +
       '<dt>Koordinat</dt><dd>' + ((a.perkiraan || a.lat == null) ? '<span class="tag-warn">Belum tersedia</span>' : (+a.lat).toFixed(6) + ', ' + (+a.lng).toFixed(6)) + '</dd>' +
-      '</dl></div>' +
+      '</dl>' +
+      '<div class="nilai" id="nilai">' +
+      '<h4>Penilaian aset</h4>' +
+      '<p class="nilai-info" id="nilai-info"></p>' +
+      '<div class="nilai-grid">' +
+      '<label class="nilai-f"><span>Nilai Aset</span><input id="nilai-rp" maxlength="80" placeholder="Contoh: 1.250.000.000" autocomplete="off"></label>' +
+      '<label class="nilai-f"><span>Nomor Dokumen Penilaian</span><input id="nilai-dok" maxlength="120" placeholder="Contoh: LP-123/KNL.17/2026" autocomplete="off"></label>' +
+      '<label class="nilai-f"><span>Tanggal Penilaian</span><input id="nilai-tgl" type="date"></label>' +
+      '</div>' +
+      '<div class="nilai-aksi" id="nilai-aksi"><input id="nilai-nama" maxlength="60" placeholder="Nama pengisi (opsional)" autocomplete="off">' +
+      '<button type="button" class="upd-simpan" id="nilai-simpan">Simpan penilaian</button>' +
+      '<button type="button" class="upd-batal" id="nilai-kosong">Kosongkan</button></div>' +
+      '<p class="upd-pesan" id="nilai-pesan" hidden></p>' +
+      '<p class="nilai-meta" id="nilai-meta"></p>' +
+      '</div></div>' +
       (a.dokumen.length ? '<div class="sec"><h3>Dokumen kepemilikan</h3><ul>' + li(a.dokumen) + '</ul></div>' : '') +
       '<div class="sec upd"><h3>Permasalahan dan perkembangan</h3>' +
       '<p class="upd-info" id="upd-info"></p>' +
@@ -200,6 +507,7 @@
       '<div class="d-grid"><div class="panel">' + main + '</div><aside class="aside panel">' + aside + '</aside></div>';
     hydrateImages($('#detail'));
     buildMap(a);
+    siapkanNilai(a);
     siapkanCatatan(a);
     siapkanFoto(a);
   }
@@ -243,7 +551,7 @@
       var d = r.data || {}, k = d.k || 'add';
       if (k === 'ovr' && typeof d.i === 'number') ovr[d.i] = r;
       else if (k === 'del' && typeof d.i === 'number') del[d.i] = r;
-      else tambah.push(r);
+      else if (k === 'add') tambah.push(r);
     });
     var out = [], buang = [];
     a.catatan.forEach(function (teks, i) {
@@ -286,16 +594,17 @@
           '<span class="upd-no">' + (i + 1) + '.</span>' +
           '<div class="upd-isi"><div class="upd-teks">' + esc(it.teks) + '</div>' +
           '<div class="upd-meta">' + esc(metaCatatan(it)) + '</div></div>' +
-          '<div class="upd-tombol">' +
-          '<button type="button" class="upd-ubah" data-key="' + esc(it.key) + '">Ubah</button>' +
-          '<button type="button" class="upd-hapus" data-key="' + esc(it.key) + '">Hapus</button></div></li>';
+          (bisaUbah() ? '<div class="upd-tombol">' +
+            '<button type="button" class="upd-ubah" data-key="' + esc(it.key) + '">Ubah</button>' +
+            '<button type="button" class="upd-hapus" data-key="' + esc(it.key) + '">Hapus</button></div>' : '') + '</li>';
       }).join('');
     }
     var pul = $('#upd-pulih');
     if (pul) {
       var n = (catRows._buang || []).length;
       pul.hidden = !n;
-      pul.innerHTML = n ? n + ' baris dari dokumen disembunyikan. <button type="button" class="upd-link" id="upd-pulihkan">Tampilkan kembali</button>' : '';
+      pul.innerHTML = n ? n + ' baris dari dokumen disembunyikan.' +
+        (bisaUbah() ? ' <button type="button" class="upd-link" id="upd-pulihkan">Tampilkan kembali</button>' : '') : '';
     }
   }
   function muatCatatan(a) {
@@ -304,16 +613,20 @@
     return window.ASET_UPDATES.list(a.id).then(function (rows) {
       if (cur !== a) return;
       catRows = susunCatatan(a, rows); catEdit = null; gambarCatatan();
+      terapkanNilai(rows);
     }).catch(function (err) {
       ol.innerHTML = '<li class="upd-kosong">Gagal memuat catatan. ' + esc(err.message || '') + '</li>';
+      pesan('Data penilaian gagal dimuat. ' + (err.message || ''), 'err', '#nilai-pesan');
     });
   }
   function siapkanCatatan(a) {
     catRows = []; catEdit = null;
     var pusat = window.ASET_UPDATES && window.ASET_UPDATES.pusat;
-    $('#upd-info').innerHTML = pusat
-      ? 'Semua baris dapat diubah dan dihapus. Perubahan tersimpan terpusat dan terlihat oleh semua pengguna yang punya akses.'
-      : '<span class="tag-warn">Belum terhubung ke penyimpanan terpusat</span> Perubahan hanya tersimpan di perangkat ini.';
+    $('#upd-info').innerHTML = !bisaUbah() ? catatanBaca()
+      : (pusat
+        ? 'Semua baris dapat diubah dan dihapus. Perubahan tersimpan bersama dan terlihat oleh semua pengguna yang punya akses.'
+        : '<span class="tag-warn">Belum terhubung ke penyimpanan bersama</span> Perubahan hanya tersimpan di perangkat ini.');
+    $('#upd-form').hidden = !bisaUbah();
     muatCatatan(a);
     $('#upd-form').onsubmit = function (e) {
       e.preventDefault();
@@ -399,6 +712,89 @@
     }
   });
 
+
+  /* ---------- Penilaian aset: Nilai Aset, Nomor Dokumen, Tanggal ---------- */
+  var nilaiRec = null;
+  var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  function tglPanjang(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return iso || '';
+    return (+m[3]) + ' ' + BULAN[+m[2] - 1] + ' ' + m[1];
+  }
+  /* angka saja dirapikan jadi format rupiah; teks lain dibiarkan apa adanya */
+  function rapikanRupiah(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    if (!/^(rp\.?\s*)?[\d.,\s]+$/i.test(v)) return v;
+    var angka = v.replace(/[^\d]/g, '');
+    if (!angka) return v;
+    return 'Rp ' + angka.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  function terapkanNilai(rows) {
+    nilaiRec = null;
+    (rows || []).forEach(function (r) {
+      var d = r.data || {};
+      if (d.k === 'nilai') nilaiRec = r;
+    });
+    var d = (nilaiRec && nilaiRec.data) || {};
+    if ($('#nilai-rp')) $('#nilai-rp').value = d.n || '';
+    if ($('#nilai-dok')) $('#nilai-dok').value = d.d || '';
+    if ($('#nilai-tgl')) $('#nilai-tgl').value = d.g || '';
+    var meta = $('#nilai-meta');
+    if (meta) {
+      meta.textContent = nilaiRec
+        ? 'Diisi ' + tglIndo(d.w || nilaiRec.created_at) + (d.p ? ' oleh ' + d.p : '') +
+          (d.g ? ' · tanggal penilaian ' + tglPanjang(d.g) : '')
+        : 'Belum diisi.';
+    }
+  }
+  function siapkanNilai(a) {
+    nilaiRec = null;
+    var pusat = window.ASET_UPDATES && window.ASET_UPDATES.pusat;
+    $('#nilai-info').innerHTML = !bisaUbah() ? catatanBaca()
+      : (pusat
+        ? 'Ketik langsung di kotak di bawah ini, lalu klik Simpan penilaian. Isinya terlihat oleh semua pengguna yang punya akses.'
+        : '<span class="tag-warn">Belum terhubung ke penyimpanan bersama</span> Isian hanya tersimpan di perangkat ini.');
+    var boleh = bisaUbah();
+    $('#nilai-aksi').hidden = !boleh;
+    ['#nilai-rp', '#nilai-dok', '#nilai-tgl'].forEach(function (x) { $(x).disabled = !boleh; });
+    $('#nilai-rp').value = ''; $('#nilai-dok').value = ''; $('#nilai-tgl').value = '';
+    $('#nilai-meta').textContent = 'Memuat…';
+    pesan('', '', '#nilai-pesan');
+
+    $('#nilai-rp').onblur = function () { this.value = rapikanRupiah(this.value); };
+    $('#nilai-simpan').onclick = function () { simpanNilai(a, false); };
+    $('#nilai-kosong').onclick = function () {
+      if (!confirm('Kosongkan ketiga isian penilaian untuk aset ini?')) return;
+      simpanNilai(a, true);
+    };
+  }
+  function simpanNilai(a, kosongkan) {
+    var tombol = $('#nilai-simpan'), hapus = $('#nilai-kosong');
+    var n = kosongkan ? '' : rapikanRupiah($('#nilai-rp').value);
+    var d = kosongkan ? '' : $('#nilai-dok').value.trim();
+    var g = kosongkan ? '' : $('#nilai-tgl').value;
+    var p = $('#nilai-nama').value.trim();
+    if (!kosongkan && !n && !d && !g) { pesan('Isi dulu salah satu kotak sebelum disimpan.', 'err', '#nilai-pesan'); return; }
+    tombol.disabled = true; hapus.disabled = true;
+    tombol.textContent = 'Menyimpan…'; pesan('', '', '#nilai-pesan');
+    var lama = nilaiRec ? window.ASET_UPDATES.del(a.id, nilaiRec.id) : Promise.resolve();
+    var tulis = (kosongkan && !nilaiRec)
+      ? Promise.resolve()
+      : lama.then(function () {
+        if (kosongkan) return null;
+        return window.ASET_UPDATES.add(a.id, { k: 'nilai', n: n, d: d, g: g, p: p, w: new Date().toISOString() });
+      });
+    tulis.then(function () {
+      pesan(kosongkan ? 'Isian penilaian dikosongkan.' : 'Penilaian tersimpan.', 'ok', '#nilai-pesan');
+      return muatCatatan(a);
+    }).catch(function (err) {
+      pesan('Gagal menyimpan. ' + (err.message || ''), 'err', '#nilai-pesan');
+    }).then(function () {
+      tombol.disabled = false; hapus.disabled = false; tombol.textContent = 'Simpan penilaian';
+    });
+  }
+
   /* ---------- Foto: tampilkan, hapus, unggah ---------- */
   var FOTO = [], upUrl = {};
   function susunFoto(a, rows) {
@@ -432,7 +828,7 @@
     box.innerHTML = FOTO.map(function (f, i) {
       return '<figure class="fto">' +
         '<button type="button" class="fto-img" data-i="' + i + '" aria-label="Perbesar foto: ' + esc(f.caption) + '"><img alt="' + esc(f.caption) + '"></button>' +
-        '<button type="button" class="fto-del" data-i="' + i + '" title="Hapus foto ini">Hapus</button>' +
+        (bisaUbah() ? '<button type="button" class="fto-del" data-i="' + i + '" title="Hapus foto ini">Hapus</button>' : '') +
         (f.t === 'up' ? '<figcaption class="fto-tag">Unggahan</figcaption>' : '') +
         '</figure>';
     }).join('');
@@ -484,6 +880,8 @@
   }
   function siapkanFoto(a) {
     FOTO = []; upUrl = {};
+    var form = document.querySelector('#detail .fto-form');
+    if (form) form.hidden = !bisaUbah();
     muatFoto(a);
     var tombol = $('#fto-unggah'); if (!tombol) return;
     tombol.onclick = function () {
@@ -548,6 +946,12 @@
     });
   }
 
-  function boot() { route(); }
+  function boot() {
+    aturTombolMode();
+    route();
+    var simpan = null;
+    try { simpan = sessionStorage.getItem('aset-tampilan'); } catch (e) {}
+    setTampilan(simpan === 'tabel' ? 'tabel' : 'peta');
+  }
   boot();
 })();

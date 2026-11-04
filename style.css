@@ -6,6 +6,7 @@
   --radius:12px; --shadow:0 1px 2px rgba(41,22,111,.05),0 6px 20px rgba(41,22,111,.06);
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
 a{color:var(--navy);font-weight:600}
@@ -293,3 +294,112 @@ a{color:var(--blue)}
 @media (max-width:860px){
   .upd-tombol{grid-column:2;justify-self:start}
 }
+
+/* Pilihan tampilan: Tabel / Peta */
+.tampil-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:16px 2px 10px}
+.tampil-bar .count{margin:0}
+.tampil{display:inline-flex;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:3px;gap:3px;box-shadow:var(--shadow)}
+.tampil-btn{border:0;background:none;font:inherit;font-size:14.5px;font-weight:700;color:var(--ink-2);padding:8px 18px;border-radius:8px;cursor:pointer}
+.tampil-btn:hover{color:var(--navy)}
+.tampil-btn.on{background:var(--navy);color:#fff}
+
+/* Peta sebaran aset */
+.map-wrap{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+#big-map{height:min(66vh,580px);width:100%;background:var(--navy-soft)}
+.map-bawah{display:flex;gap:18px;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-top:1px solid var(--line);flex-wrap:wrap}
+.map-legend{display:flex;flex-wrap:wrap;gap:8px 16px;flex:1;min-width:240px}
+.kat-cek{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);font-weight:600;cursor:pointer;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px}
+.kat-cek:hover{border-color:var(--navy-line)}
+.kat-cek input{width:16px;height:16px;accent-color:var(--navy);cursor:pointer;margin:0}
+.kat-cek .kat-pin{width:13px;height:18px;flex:none;border-radius:50% 50% 50% 50%/40% 40% 60% 60%;clip-path:polygon(50% 100%,0 42%,0 0,100% 0,100% 42%);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.kat-cek b{font-variant-numeric:tabular-nums;color:var(--navy)}
+.map-alat{display:flex;align-items:center;gap:4px;flex:none}
+.map-btn{border:1.5px solid var(--navy-line);background:#fff;color:var(--navy);font:inherit;font-size:14px;font-weight:700;border-radius:9px;padding:8px 14px;cursor:pointer}
+.map-btn:hover{background:var(--navy);border-color:var(--navy);color:#fff}
+.map-info{margin:0;padding:0 18px 16px;font-size:13.5px}
+.pin-bungkus{display:block;line-height:0;transition:transform .12s;transform-origin:50% 100%}
+.pin-bungkus svg{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.pin-bungkus:hover{transform:scale(1.12)}
+.pin-pilih{transform:scale(1.25)}
+.pin-pilih svg{filter:drop-shadow(0 0 0 3px rgba(248,195,0,.9)) drop-shadow(0 3px 5px rgba(0,0,0,.45))}
+.gugus{display:grid;place-items:center;border-radius:50%;background:rgba(41,22,111,.9);color:#fff;font-weight:800;font-size:14px;border:3px solid var(--gold);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+.leaflet-popup-content-wrapper{border-radius:10px}
+.leaflet-popup-content{margin:12px 14px;font:inherit;line-height:1.5}
+.pop-kode{font-size:12.5px;font-weight:700;color:var(--navy);letter-spacing:.02em}
+.pop-nama{font-size:15.5px;font-weight:800;margin:2px 0 4px;color:var(--ink)}
+.pop-alamat{font-size:13.5px;color:var(--muted);margin-bottom:8px}
+.pop-baris{margin-bottom:6px}
+.pop-luas{font-size:13.5px;color:var(--ink-2)}
+.pop-perkiraan{font-size:12.5px;color:#b45309;background:var(--gold-soft);border-radius:6px;padding:4px 8px;margin-bottom:6px}
+.pop-link{display:inline-block;margin-top:2px;font-size:14px;font-weight:700}
+@media (max-width:860px){
+  .tampil-bar{gap:10px}
+  .tampil-btn{padding:8px 14px}
+  #big-map{height:62vh}
+  .map-bawah{flex-direction:column;align-items:flex-start;gap:12px}
+  .map-alat{flex-wrap:wrap}
+}
+.map-cek{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--ink-2);margin-right:12px;cursor:pointer}
+.map-cek input{width:17px;height:17px;accent-color:var(--navy);cursor:pointer}
+
+/* Peta: area dan panel samping */
+.map-area{position:relative}
+.map-panel{position:absolute;top:0;right:0;bottom:0;width:352px;background:#fff;border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(41,22,111,.1);z-index:1000;overflow-y:auto;display:flex;flex-direction:column}
+.panel-tutup{position:absolute;top:10px;right:10px;z-index:2;border:0;background:rgba(27,27,47,.62);color:#fff;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;line-height:1}
+.panel-tutup:hover{background:rgba(27,27,47,.88)}
+.panel-foto{position:relative;background:var(--navy-soft);height:208px;flex:none}
+.panel-foto img{width:100%;height:100%;object-fit:cover;display:block}
+.panel-kosong{display:grid;place-items:center;color:var(--muted);font-size:14.5px}
+.panel-fnav{position:absolute;top:50%;transform:translateY(-50%);border:0;background:rgba(27,27,47,.5);color:#fff;width:30px;height:38px;font-size:20px;cursor:pointer;line-height:1}
+.panel-fnav:hover{background:rgba(27,27,47,.8)}
+.panel-prev{left:0;border-radius:0 6px 6px 0}
+.panel-next{right:0;border-radius:6px 0 0 6px}
+.panel-fno{position:absolute;right:8px;bottom:8px;background:rgba(27,27,47,.7);color:#fff;font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px}
+.panel-isi{padding:16px 18px 20px}
+.panel-kat{display:inline-block;color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:3px 11px;letter-spacing:.01em}
+.panel-kode{font-size:12.5px;font-weight:700;color:var(--navy);margin-top:10px;letter-spacing:.02em}
+.panel-nama{font-size:17px;font-weight:800;margin:3px 0 5px;line-height:1.3;color:var(--ink)}
+.panel-alamat{margin:0 0 10px;font-size:13.5px;color:var(--muted);line-height:1.5}
+.panel-status{margin-bottom:12px}
+.panel-kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0 0 12px;font-size:14px}
+.panel-kv dt{color:var(--muted)}
+.panel-kv dd{margin:0;color:var(--ink);font-weight:600}
+.panel-kira{margin:0 0 12px;font-size:12.5px;color:#b45309;background:var(--gold-soft);border-radius:7px;padding:7px 10px}
+.panel-btn{display:block;text-align:center;background:var(--navy);color:#fff;font-size:15.5px;font-weight:700;border-radius:9px;padding:12px 16px;text-decoration:none}
+.panel-btn:hover{background:#3B2A8C;color:#fff}
+@media (max-width:860px){
+  .map-panel{top:auto;left:0;width:auto;max-height:66%;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px rgba(41,22,111,.16)}
+  .panel-foto{height:168px}
+}
+
+/* Penilaian aset: tiga kotak isian di dalam kartu Data aset */
+.nilai{margin-top:20px;padding-top:18px;border-top:2px dashed var(--navy-line)}
+.nilai h4{margin:0 0 6px;font-size:15.5px;font-weight:800;color:var(--navy)}
+.nilai-info{margin:0 0 14px;font-size:14px;color:var(--ink-2)}
+.nilai-info .tag-warn{margin-right:6px}
+.nilai-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.nilai-f{display:flex;flex-direction:column;gap:6px}
+.nilai-f:first-child{grid-column:1/-1}
+.nilai-f span{font-size:13.5px;font-weight:700;color:var(--ink-2)}
+.nilai-f input{font:inherit;font-size:15.5px;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:10px 13px;width:100%}
+.nilai-f input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(41,22,111,.12)}
+.nilai-f input::placeholder{color:#9aa0b4}
+.nilai-aksi{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.nilai-aksi input{flex:1;min-width:170px;font:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px}
+.nilai-aksi input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(41,22,111,.12)}
+.nilai-aksi .upd-batal{padding:10px 16px}
+.nilai-meta{margin:10px 0 0;font-size:13px;color:var(--muted)}
+@media (max-width:860px){
+  .nilai-grid{grid-template-columns:1fr}
+  .nilai-aksi{flex-direction:column}
+  .nilai-aksi .upd-simpan,.nilai-aksi .upd-batal{width:100%}
+}
+
+/* Tombol mode isi dan kotak token */
+.mast-aksi{display:flex;gap:8px;align-items:center;flex:none}
+.tokbox{position:fixed;inset:0;z-index:2500;background:rgba(18,10,48,.72);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+.tokbox[hidden]{display:none}
+.tokbox .gate-card{max-width:480px}
+.tok-batal{width:100%;margin-top:10px;border:1.5px solid var(--line);background:#fff;color:var(--ink-2);font:inherit;font-size:15.5px;font-weight:700;border-radius:10px;padding:11px 16px;cursor:pointer}
+.tok-batal:hover{background:var(--bg)}
+@media (max-width:860px){.mast-aksi{position:absolute;top:16px;right:16px}.mast-aksi .logout{position:static}}
